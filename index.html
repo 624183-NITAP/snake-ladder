@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Snake & Ladder — 2 Player (Animated)</title>
+  <style>
+    :root{
+      --bg:#eef2ff; --panel:#fff; --muted:#6b7280; --accent:#2563eb;
+      --snake:#ffe4e6; --ladder:#e7fbe8;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:linear-gradient(180deg,#f8fbff, #eef2ff);color:#0f172a}
+    .wrap{max-width:1060px;margin:28px auto;padding:18px;background:var(--panel);border-radius:14px;box-shadow:0 12px 30px rgba(2,6,23,0.08)}
+    header{display:flex;align-items:center;justify-content:space-between;gap:12px}
+    h1{margin:0;font-size:1.4rem}
+    .controls{display:flex;gap:10px;align-items:center}
+    button{border:0;padding:10px 14px;border-radius:10px;font-weight:700;cursor:pointer}
+    #rollBtn{background:var(--accent);color:#fff}
+    #resetBtn{background:#eef2f7;color:#073b4c}
+    .layout{display:grid;grid-template-columns:1fr 320px;gap:18px;margin-top:16px}
+    .board{background:linear-gradient(180deg,#fff,#f3f7ff);padding:10px;border-radius:14px;border:6px solid #e6eefc;display:grid;grid-template-columns:repeat(10,1fr);gap:6px;position:relative;aspect-ratio:1;min-height:560px;overflow:visible}
+    .cell{background:#f8fafc;border-radius:8px;border:1px solid #e6e9f3;position:relative;padding:6px;display:flex;align-items:flex-start;justify-content:flex-start;min-height:0}
+    .cell.snake{background:var(--snake);border-color:#f1b6be}
+    .cell.ladder{background:var(--ladder);border-color:#bfeccf}
+    .cell .num{position:absolute;left:8px;top:6px;font-size:0.72rem;font-weight:800;color:#24303f}
+    .board-grid-label{position:absolute;right:12px;top:12px;font-size:0.9rem;color:var(--muted)}
+    /* tokens are absolutely positioned inside .board */
+    .token{width:26px;height:26px;border-radius:50%;position:absolute;transform:translate(-50%,-50%);box-shadow:0 4px 10px rgba(2,6,23,0.18);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;border:2px solid rgba(255,255,255,0.6)}
+    /* token transition animation */
+    .token.move{transition:transform 300ms cubic-bezier(.2,.9,.2,1), transform 300ms}
+    .token.slide{transition:transform 700ms cubic-bezier(.2,.7,.2,1), transform 700ms}
+    /* side panel */
+    .panel{display:flex;flex-direction:column;gap:12px}
+    .card{background:#fff;padding:12px;border-radius:12px;border:1px solid #eef2fb}
+    .players{display:flex;flex-direction:column;gap:8px}
+    .player-row{display:flex;align-items:center;justify-content:space-between;padding:8px;border-radius:10px}
+    .player-info{display:flex;gap:10px;align-items:center}
+    .dot{width:16px;height:16px;border-radius:50%;border:2px solid rgba(0,0,0,0.12)}
+    .current{outline:3px solid rgba(37,99,235,0.12);box-shadow:0 6px 18px rgba(37,99,235,0.06)}
+    .status{font-weight:800;color:#0f172a}
+    /* dice */
+    .dice{width:64px;height:64px;border-radius:10px;background:#fff;border:1px solid #e6eefc;display:flex;align-items:center;justify-content:center;font-size:1.25rem;font-weight:900;box-shadow:0 8px 20px rgba(2,6,23,0.06)}
+    .dice.rolling{animation:roll 700ms cubic-bezier(.2,.9,.2,1)}
+    @keyframes roll{0%{transform:rotate(0) scale(1)}50%{transform:rotate(180deg) scale(1.08)}100%{transform:rotate(360deg) scale(1)}}
+    /* legend */
+    .legend{display:flex;gap:10px;flex-wrap:wrap}
+    .legend span{display:inline-flex;align-items:center;gap:8px;font-weight:700}
+    .sw{width:18px;height:18px;border-radius:6px}
+    /* responsive */
+    @media (max-width:820px){.layout{grid-template-columns:1fr;}.board{min-height:420px}}
+  </style>
+</head>
+<body>
+  <div class="wrap" role="application" aria-label="Snake and Ladder 2 player animated">
+    <header>
+      <h1>Snake & Ladder — 2 Player (Animated)</h1>
+      <div class="controls">
+        <div id="status" class="status">Player 1's turn</div>
+        <button id="rollBtn">Roll Dice</button>
+        <button id="resetBtn">Reset</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <div class="board" id="board" aria-hidden="false">
+        <div class="board-grid-label">100 squares • zigzag</div>
+      </div>
+
+      <aside class="panel">
+        <div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+            <div style="display:flex;gap:12px;align-items:center">
+              <div class="dice" id="dice">—</div>
+              <div style="font-weight:800">Roll the dice</div>
+            </div>
+            <div style="text-align:right;color:var(--muted)">Try to get exactly 100 to win</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 8px 0">Players</h3>
+          <div id="players" class="players"></div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 8px 0">Legend</h3>
+          <div class="legend">
+            <span><i class="sw" style="background:var(--snake);border:1px solid #f1b6be"></i>Snake</span>
+            <span><i class="sw" style="background:var(--ladder);border:1px solid #bfeccf"></i>Ladder</span>
+            <span><i class="sw" style="background:var(--accent)"></i>Current Player</span>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    // Snakes and ladders definitions (classic-ish)
+    const snakes = {16:6,47:26,49:11,56:53,62:19,64:60,87:24,93:73,95:75,98:78};
+    const ladders = {1:38,4:14,9:31,21:42,28:84,36:44,51:67,71:91,80:100};
+
+    // 2 players
+    const players = [
+      {name:'Player 1', color:'#ff6b6b', pos:0, id:1},
+      {name:'Player 2', color:'#4dabf7', pos:0, id:2}
+    ];
+    let current = 0;
+    let winner = null;
+    const boardEl = document.getElementById('board');
+    const playersEl = document.getElementById('players');
+    const diceEl = document.getElementById('dice');
+    const rollBtn = document.getElementById('rollBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const statusEl = document.getElementById('status');
+    let cellPositions = {}; // map number -> {x,y}
+    const tokenSize = 26;
+
+    // Build zigzag 10x10 pattern like standard board (100..1)
+    function buildPattern(){
+      const pattern = [];
+      for(let r=0;r<10;r++){
+        const start = 100 - r*10;
+        if(r%2===0){
+          for(let i=0;i<10;i++) pattern.push(start - i);
+        } else {
+          for(let i=9;i>=0;i--) pattern.push(start - i);
+        }
+      }
+      return pattern;
+    }
+    const pattern = buildPattern();
+
+    // Render cells and compute positions after paint
+    function renderBoard(){
+      boardEl.innerHTML = '<div class="board-grid-label">100 squares • zigzag</div>';
+      pattern.forEach(num=>{
+        const cell = document.createElement('div');
+        cell.className='cell';
+        if(snakes[num]) cell.classList.add('snake');
+        if(ladders[num]) cell.classList.add('ladder');
+        cell.dataset.num = num;
+        const lbl = document.createElement('span'); lbl.className='num'; lbl.textContent = num;
+        cell.appendChild(lbl);
+        boardEl.appendChild(cell);
+      });
+      // create tokens as absolutely positioned elements inside board
+      players.forEach(p=>{
+        let existing = document.querySelector(`.token[data-player="${p.id}"]`);
+        if(!existing){
+          const t = document.createElement('div');
+          t.className = 'token';
+          t.dataset.player = p.id;
+          t.style.background = p.color;
+          t.textContent = p.id; // small label
+          t.style.left = '50%';
+          t.style.top = '102%'; // initial off-board start area (below)
+          boardEl.appendChild(t);
+        } else {
+          existing.style.background = p.color;
+        }
+      });
+      // compute positions after layout
+      requestAnimationFrame(computeCellCenters);
+    }
+
+    function computeCellCenters(){
+      cellPositions = {};
+      const cells = boardEl.querySelectorAll('.cell');
+      const boardRect = boardEl.getBoundingClientRect();
+      cells.forEach(cell=>{
+        const num = Number(cell.dataset.num);
+        const rect = cell.getBoundingClientRect();
+        const x = rect.left - boardRect.left + rect.width/2;
+        const y = rect.top - boardRect.top + rect.height/2;
+        cellPositions[num] = {x, y};
+      });
+      // also define start position (0) offboard near bottom center
+      const bRect = boardEl.getBoundingClientRect();
+      cellPositions[0] = {x: bRect.width / 2, y: bRect.height + 30};
+      // place tokens to their correct positions
+      players.forEach(p => placeTokenInstant(p));
+    }
+
+    // place token instantly (no animation) at player's position
+    function placeTokenInstant(player){
+      const t = document.querySelector(`.token[data-player="${player.id}"]`);
+      const pos = cellPositions[player.pos] || cellPositions[0];
+      t.classList.remove('move','slide');
+      t.style.transition = 'none';
+      t.style.transform = `translate(${pos.x}px, ${pos.y}px) translate(-50%,-50%)`;
+    }
+
+    // utility sleep
+    const sleep = ms => new Promise(res=>setTimeout(res,ms));
+
+    // animate token along steps one-by-one
+    async function animateMove(player, from, to){
+      const token = document.querySelector(`.token[data-player="${player.id}"]`);
+      // ensure transitions are enabled
+      token.classList.add('move');
+      token.style.transition = '';
+      // animate step-by-step so movement looks like token hopping squares
+      const stepDelay = 320;
+      const path = [];
+      for(let s = from + 1; s <= to; s++) path.push(s);
+      for(const square of path){
+        const dest = cellPositions[square];
+        token.style.transform = `translate(${dest.x}px, ${dest.y}px) translate(-50%,-50%)`;
+        await sleep(stepDelay);
+      }
+      // check for snake or ladder
+      const landed = player.pos;
+      if(snakes[landed]){
+        const dest = snakes[landed];
+        // slide down with different easing
+        token.classList.remove('move'); token.classList.add('slide');
+        const toPos = cellPositions[dest];
+        await sleep(150);
+        token.style.transform = `translate(${toPos.x}px, ${toPos.y}px) translate(-50%,-50%)`;
+        await sleep(720);
+      } else if(ladders[landed]){
+        const dest = ladders[landed];
+        token.classList.remove('move'); token.classList.add('slide');
+        const toPos = cellPositions[dest];
+        await sleep(120);
+        token.style.transform = `translate(${toPos.x}px, ${toPos.y}px) translate(-50%,-50%)`;
+        await sleep(760);
+      }
+    }
+
+    // update players panel UI
+    function renderPlayers(){
+      playersEl.innerHTML = '';
+      players.forEach((p, idx)=>{
+        const row = document.createElement('div');
+        row.className = 'player-row';
+        if(idx === current && !winner) row.classList.add('current');
+        const info = document.createElement('div'); info.className='player-info';
+        const dot = document.createElement('div'); dot.className='dot'; dot.style.background = p.color;
+        const name = document.createElement('div'); name.textContent = p.name;
+        info.appendChild(dot); info.appendChild(name);
+        const pos = document.createElement('div'); pos.style.fontWeight='800';
+        pos.textContent = p.pos === 0 ? 'Start' : `#${p.pos}`;
+        row.appendChild(info); row.appendChild(pos);
+        playersEl.appendChild(row);
+      });
+    }
+
+    // dice animation then return rolled number
+    async function rollDiceAnimation(){
+      diceEl.classList.add('rolling');
+      const animTime = 700;
+      const start = Date.now();
+      // show quick changing numbers
+      const changeInterval = 60;
+      const intervalId = setInterval(()=>{
+        const face = Math.floor(Math.random()*6)+1;
+        diceEl.textContent = face;
+      }, changeInterval);
+      await sleep(animTime);
+      clearInterval(intervalId);
+      diceEl.classList.remove('rolling');
+      const final = Math.floor(Math.random()*6)+1;
+      diceEl.textContent = final;
+      return final;
+    }
+
+    // main roll handler (async)
+    async function handleRoll(){
+      if(winner) return;
+      rollBtn.disabled = true;
+      const player = players[current];
+      updateStatus(`${player.name} is rolling...`);
+      const roll = await rollDiceAnimation();
+
+      // small delay so player sees result before movement
+      await sleep(260);
+
+      // compute target and enforce exact finish rule
+      const from = player.pos;
+      let target = from + roll;
+      if(target > 100){
+        updateStatus(`${player.name} rolled ${roll} (needs ${100 - from}). Can't move. Next: ${players[(current+1)%players.length].name}`);
+        // quick bounce animation (visual feedback)
+        const tk = document.querySelector(`.token[data-player="${player.id}"]`);
+        tk.animate([{transform:tk.style.transform},{transform:`translate(${cellPositions[from].x}px, ${cellPositions[from].y-16}px) translate(-50%,-50%)`},{transform:tk.style.transform}],{duration:420,easing:'ease-out'});
+        await sleep(420);
+        // next player
+        current = (current + 1) % players.length;
+        renderPlayers();
+        rollBtn.disabled = false;
+        return;
+      }
+
+      // update internal pos stepwise for animation's sake
+      // we'll update player.pos to intermediate squares so sliding detection works after landing
+      const prevPos = player.pos;
+      player.pos = target; // final intended landing for snakes/ladders check later
+      await animateMove(player, prevPos, target);
+
+      // after step animation, check snake or ladder
+      let finalPos = player.pos;
+      if(snakes[player.pos]) finalPos = snakes[player.pos];
+      else if(ladders[player.pos]) finalPos = ladders[player.pos];
+      // If snake/ladder changed final pos, update model now (the animateMove already performed a slide)
+      player.pos = finalPos;
+
+      renderPlayers();
+
+      if(player.pos === 100){
+        winner = player;
+        updateStatus(`${player.name} wins! 🎉`);
+        // winner pop
+        const token = document.querySelector(`.token[data-player="${player.id}"]`);
+        token.animate([{transform:token.style.transform+' scale(1)'},{transform:token.style.transform+' scale(1.16)'},{transform:token.style.transform+' scale(1)'}],{duration:900,iterations:2,easing:'ease-out'});
+        rollBtn.disabled = true;
+        return;
+      }
+
+      // next player
+      current = (current + 1) % players.length;
+      updateStatus(`${player.name} rolled ${roll}. Next: ${players[current].name}`);
+      renderPlayers();
+      rollBtn.disabled = false;
+    }
+
+    function updateStatus(text){
+      statusEl.textContent = text;
+    }
+
+    function resetGame(){
+      players.forEach(p => p.pos = 0);
+      current = 0; winner = null;
+      diceEl.textContent = '—';
+      rollBtn.disabled = false;
+      updateStatus(`${players[0].name}'s turn`);
+      renderPlayers();
+      // place tokens instantly
+      requestAnimationFrame(()=>players.forEach(p => placeTokenInstant(p)));
+    }
+
+    // events
+    rollBtn.addEventListener('click', ()=>{ if(!rollBtn.disabled) handleRoll(); });
+    resetBtn.addEventListener('click', resetGame);
+    window.addEventListener('resize', computeCellCenters);
+
+    // initial render
+    renderBoard();
+    renderPlayers();
+    // small timeout to ensure computeCellCenters ran and tokens positioned
+    setTimeout(()=>{ computeCellCenters(); }, 120);
+  </script>
+</body>
+</html>
